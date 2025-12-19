@@ -92,8 +92,20 @@ export default function App() {
 
     const checkKey = async () => {
       // @ts-ignore
-      const selected = await window.aistudio.hasSelectedApiKey();
-      setHasKey(selected);
+      if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+        try {
+          // @ts-ignore
+          const selected = await window.aistudio.hasSelectedApiKey();
+          setHasKey(selected);
+        } catch (e) {
+          console.error("AI Studio key check failed:", e);
+          setHasKey(true); // Fallback to assuming key is provided via env
+        }
+      } else {
+        // Not in AI Studio environment (e.g. on Vercel)
+        // Key should be set in environment variables
+        setHasKey(true);
+      }
     };
     checkKey();
   }, [isDarkMode]);
@@ -150,9 +162,20 @@ export default function App() {
 
   const handleLinkKey = async () => {
     // @ts-ignore
-    await window.aistudio.openSelectKey();
-    const selected = await window.aistudio.hasSelectedApiKey();
-    setHasKey(selected);
+    if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+      try {
+        // @ts-ignore
+        await window.aistudio.openSelectKey();
+        // @ts-ignore
+        const selected = await window.aistudio.hasSelectedApiKey();
+        setHasKey(selected);
+      } catch (e) {
+        console.error("Failed to open AI Studio key selector:", e);
+        setError("AI Studio bridge failed. Ensure you've set your API_KEY in project settings.");
+      }
+    } else {
+      setError("This engine is managed via environment variables on this domain.");
+    }
   };
 
   const saveConfigs = () => {
@@ -164,7 +187,10 @@ export default function App() {
     e.preventDefault();
     if (!projectName.trim()) return;
     
-    if (engine === ProviderEngine.GEMINI && !hasKey) {
+    // @ts-ignore
+    const isAiStudio = !!(window.aistudio && window.aistudio.openSelectKey);
+
+    if (engine === ProviderEngine.GEMINI && !hasKey && isAiStudio) {
       await handleLinkKey();
       return;
     }
