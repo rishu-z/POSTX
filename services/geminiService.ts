@@ -14,7 +14,7 @@ export const generateXPost = async (request: PostRequest): Promise<GeneratedPost
   const ai = new GoogleGenAI({ apiKey: activeApiKey as string });
   
   const modelMap = {
-    [ModelTier.FLASH]: 'gemini-2.5-flash-latest',
+    [ModelTier.FLASH]: 'gemini-3-flash-preview',
     [ModelTier.PRO]: 'gemini-3-pro-preview',
     [ModelTier.LITE]: 'gemini-flash-lite-latest'
   };
