@@ -11,6 +11,12 @@ export enum PostStyle {
   CUSTOM = 'Custom Identity'
 }
 
+export enum PostLength {
+  SHORT = 'Short',
+  MEDIUM = 'Medium',
+  LONG = 'Long'
+}
+
 export enum ProviderEngine {
   GEMINI = 'Google Gemini',
   OPENAI = 'OpenAI',
@@ -49,6 +55,7 @@ export interface PostRequest {
   projectName: string;
   maxCharacters: number;
   style: PostStyle;
+  length: PostLength;
   customStyleDescription?: string;
   engine: ProviderEngine;
   modelTier: ModelTier;

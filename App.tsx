@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { PostStyle, ModelTier, ProviderEngine, GeneratedPost, ProviderConfig } from './types';
+import { PostStyle, PostLength, ModelTier, ProviderEngine, GeneratedPost, ProviderConfig } from './types';
 import { generateXPost } from './services/geminiService';
 import { Button } from './components/Button';
 import { PostCard } from './components/PostCard';
@@ -29,8 +29,7 @@ const ENGINE_MODELS: Record<string, { id: string, name: string, description?: st
     { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', description: 'Creative writing' },
   ],
   [ProviderEngine.GROQ]: [
-    { id: 'llama-3-70b-8192', name: 'Llama 3 70B', description: 'Instant generation' },
-    { id: 'llama3-8b-8192', name: 'Llama 3 8B', description: 'Hyper-speed' },
+    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Instant generation' },
   ],
   [ProviderEngine.OPENAI]: [
     { id: 'gpt-4o', name: 'GPT-4o', description: 'Flagship model' },
@@ -48,6 +47,7 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [projectName, setProjectName] = useState('');
   const [maxCharacters, setMaxCharacters] = useState(280);
+  const [postLength, setPostLength] = useState<PostLength | 'CUSTOM'>(PostLength.MEDIUM);
   const [style, setStyle] = useState<PostStyle>(PostStyle.STORYTELLER);
   const [customStyleDescription, setCustomStyleDescription] = useState('');
   const [engine, setEngine] = useState<ProviderEngine>(ProviderEngine.GEMINI);
@@ -64,7 +64,7 @@ export default function App() {
   const [setupEngine, setSetupEngine] = useState<ProviderEngine>(ProviderEngine.GEMINI);
   const [configs, setConfigs] = useState<Record<string, ProviderConfig>>({
     [ProviderEngine.GEMINI]: { engine: ProviderEngine.GEMINI, apiKey: '', model: 'gemini-3-flash-preview', temperature: 0.7 },
-    [ProviderEngine.GROQ]: { engine: ProviderEngine.GROQ, apiKey: '', model: 'llama-3-70b-8192', baseUrl: 'https://api.groq.com/openai/v1/chat/completions', temperature: 0.2 },
+    [ProviderEngine.GROQ]: { engine: ProviderEngine.GROQ, apiKey: '', model: 'llama-3.3-70b-versatile', baseUrl: 'https://api.groq.com/openai/v1/chat/completions', temperature: 0.2 },
     [ProviderEngine.OPENAI]: { engine: ProviderEngine.OPENAI, apiKey: '', model: 'gpt-4o', baseUrl: 'https://api.openai.com/v1/chat/completions', temperature: 0.7 },
     [ProviderEngine.ANTHROPIC]: { engine: ProviderEngine.ANTHROPIC, apiKey: '', model: 'claude-3-5-sonnet-latest', baseUrl: '', temperature: 0.7 },
     [ProviderEngine.OPENROUTER]: { engine: ProviderEngine.OPENROUTER, apiKey: '', model: 'google/gemini-2.0-flash-lite-preview-02-05:free', baseUrl: 'https://openrouter.ai/api/v1/chat/completions', temperature: 0.7 },
@@ -182,6 +182,13 @@ export default function App() {
     setIsSetupOpen(false);
   };
 
+  const setLengthPreset = (l: PostLength) => {
+    setPostLength(l);
+    if (l === PostLength.SHORT) setMaxCharacters(140);
+    else if (l === PostLength.MEDIUM) setMaxCharacters(280);
+    else if (l === PostLength.LONG) setMaxCharacters(1000);
+  };
+
   const handleGenerate = async (e?: React.FormEvent, refinement?: string) => {
     if (e) e.preventDefault();
     if (!projectName.trim() && !refinement) return;
@@ -212,6 +219,7 @@ export default function App() {
         projectName, 
         maxCharacters, 
         style, 
+        length: postLength === 'CUSTOM' ? PostLength.MEDIUM : postLength,
         customStyleDescription,
         engine,
         modelTier,
@@ -290,7 +298,6 @@ export default function App() {
 
               <div className="bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl p-6 border border-zinc-200 dark:border-white/5 space-y-6">
                 <div className="space-y-5">
-                  {/* Unified API Key Field */}
                   <div className="space-y-2">
                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">API Access Key</label>
                     <input 
@@ -300,12 +307,8 @@ export default function App() {
                       placeholder={setupEngine === ProviderEngine.GEMINI ? "Enter Gemini API Key..." : "sk-..."} 
                       className="w-full rounded-xl px-4 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none outline-none text-[11px] font-mono font-bold text-zinc-900 dark:text-white" 
                     />
-                    {setupEngine === ProviderEngine.GEMINI && (
-                      <p className="text-[7px] font-black uppercase tracking-widest text-[#0071e3] mt-1 opacity-60">Manual override for system key</p>
-                    )}
                   </div>
 
-                  {/* Unified Model Dropdown - Fixed positioning to open downwards and avoid clipping */}
                   <div className="space-y-2" ref={setupModelDropdownRef}>
                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Target Model</label>
                     <div className="relative">
@@ -331,30 +334,8 @@ export default function App() {
                               {m.description && <div className="text-[8px] opacity-60 font-medium truncate">{m.description}</div>}
                             </button>
                           ))}
-                          <div className="p-3 border-t border-zinc-200 dark:border-white/10 mt-1">
-                            <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mb-2">Manual Model ID</p>
-                            <input 
-                              type="text" 
-                              placeholder="e.g. gpt-4o" 
-                              value={configs[setupEngine]?.model || ''}
-                              onChange={(e) => setConfigs({...configs, [setupEngine]: {...configs[setupEngine], model: e.target.value}})}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-full bg-zinc-100 dark:bg-white/5 rounded-lg px-3 py-2 text-[10px] outline-none border-none focus:ring-1 focus:ring-[#0071e3]"
-                            />
-                          </div>
                         </div>
                       )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Temp</label>
-                      <input type="number" step="0.1" min="0" max="2" value={configs[setupEngine]?.temperature || 0.7} onChange={(e) => setConfigs({ ...configs, [setupEngine]: { ...configs[setupEngine], temperature: parseFloat(e.target.value) } })} className="w-full rounded-xl px-4 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none outline-none text-[10px] font-bold text-zinc-900 dark:text-white" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Context</label>
-                      <div className="w-full px-4 py-4 bg-zinc-100 dark:bg-zinc-800/50 rounded-xl text-[10px] font-bold opacity-40 uppercase">Hybrid</div>
                     </div>
                   </div>
                 </div>
@@ -378,15 +359,72 @@ export default function App() {
           </div>
 
           <form onSubmit={(e) => handleGenerate(e)} className="bg-white dark:bg-[#121214] rounded-[3rem] p-8 lg:p-12 space-y-10 shadow-xl border border-zinc-200 dark:border-white/10 transition-colors">
+            {/* Project Name Input */}
             <div className="space-y-3 relative">
               <div className="flex justify-between items-center px-1">
-                <label className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-500 dark:text-zinc-400">Subject or URL</label>
-                <div className="bg-zinc-100 dark:bg-white/5 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-zinc-200 dark:border-white/10">
-                   <input type="number" value={maxCharacters} onChange={(e) => setMaxCharacters(parseInt(e.target.value) || 0)} className="w-12 bg-transparent border-none focus:ring-0 text-[10px] font-mono font-bold text-[#0071e3] text-right p-0" />
-                   <span className="text-[8px] font-black text-zinc-400 dark:text-white/40">LMT</span>
+                <label className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-500 dark:text-zinc-400">Project / Topic Name</label>
+              </div>
+              <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="e.g. Bitcoin, Apple Vision Pro, or a URL..." className="w-full rounded-2xl px-6 py-5 focus:outline-none focus:ring-2 focus:ring-[#0071e3]/40 transition-all text-xl font-black border border-zinc-200 dark:border-none bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50" required />
+            </div>
+
+            {/* Manual Character Limit + Presets */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center px-1">
+                <label className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-500 dark:text-zinc-400">Character Limit</label>
+              </div>
+              <div className="flex gap-4">
+                <input 
+                  type="number" 
+                  value={maxCharacters} 
+                  onChange={(e) => {
+                    setMaxCharacters(Number(e.target.value));
+                    setPostLength('CUSTOM');
+                  }} 
+                  placeholder="280" 
+                  className="w-1/2 rounded-xl px-6 py-4 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-none text-xl font-black text-[#0071e3] focus:outline-none"
+                />
+                <div className="flex-1 grid grid-cols-3 gap-2">
+                  {Object.values(PostLength).map(l => (
+                    <button 
+                      key={l}
+                      type="button"
+                      onClick={() => setLengthPreset(l)}
+                      className={`py-3 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all border ${postLength === l ? 'bg-[#0071e3] text-white border-transparent shadow-lg' : 'bg-zinc-50 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/10'}`}
+                    >
+                      {l.charAt(0)}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Topic, @username, or https://..." className="w-full rounded-2xl px-6 py-5 focus:outline-none focus:ring-2 focus:ring-[#0071e3]/40 transition-all text-lg font-bold border border-zinc-200 dark:border-none bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50" required />
+            </div>
+
+            {/* Style / Persona Choice */}
+            <div className="space-y-3" ref={styleDropdownRef}>
+              <label className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-500 dark:text-zinc-400 px-1">Perspective Identity</label>
+              <div className="relative">
+                <button type="button" onClick={() => setActiveMenu(activeMenu === 'style' ? null : 'style')} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl px-6 py-5 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.2em] text-zinc-900 dark:text-white shadow-sm">
+                  <span className="truncate">{style}</span>
+                  <svg className={`w-4 h-4 opacity-40 transition-transform ${activeMenu === 'style' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {activeMenu === 'style' && (
+                  <div className="absolute top-full mt-3 left-0 w-full bg-white dark:bg-[#1a1a1c] rounded-[2rem] p-4 shadow-2xl border border-zinc-200 dark:border-white/10 z-[100] animate-reveal origin-top grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                    {Object.values(PostStyle).map(s => (
+                      <button key={s} type="button" onClick={() => { setStyle(s); setActiveMenu(null); }} className={`w-full text-left px-4 py-3 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${style === s ? 'bg-[#0071e3] text-white shadow-lg' : 'hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-900 dark:text-zinc-200'}`}>{s}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {style === PostStyle.CUSTOM && (
+                <div className="mt-4 animate-reveal">
+                  <textarea 
+                    value={customStyleDescription}
+                    onChange={(e) => setCustomStyleDescription(e.target.value)}
+                    placeholder="Describe the persona... (e.g. A cynical 1950s detective, or a hyper-active tech influencer)"
+                    className="w-full h-24 rounded-2xl px-6 py-4 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-none text-[11px] font-bold text-zinc-900 dark:text-white focus:ring-2 focus:ring-[#0071e3] outline-none transition-all"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -425,36 +463,8 @@ export default function App() {
               </div>
             </div>
 
-            <div className="space-y-3" ref={styleDropdownRef}>
-              <label className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-500 dark:text-zinc-400 px-1">Perspective Identity</label>
-              <div className="relative">
-                <button type="button" onClick={() => setActiveMenu(activeMenu === 'style' ? null : 'style')} className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl px-6 py-5 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.2em] text-zinc-900 dark:text-white shadow-sm">
-                  <span className="truncate">{style}</span>
-                  <svg className="w-4 h-4 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
-                </button>
-                {activeMenu === 'style' && (
-                  <div className="absolute top-full mt-3 left-0 w-full bg-white dark:bg-[#1a1a1c] rounded-[2rem] p-4 shadow-2xl border border-zinc-200 dark:border-white/10 z-[100] animate-reveal origin-top grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto custom-scrollbar">
-                    {Object.values(PostStyle).map(s => (
-                      <button key={s} type="button" onClick={() => { setStyle(s); setActiveMenu(null); }} className={`w-full text-left px-4 py-3 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${style === s ? 'bg-[#0071e3] text-white shadow-lg' : 'hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-900 dark:text-zinc-200'}`}>{s}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-              {style === PostStyle.CUSTOM && (
-                <div className="mt-4 animate-reveal">
-                  <textarea 
-                    value={customStyleDescription}
-                    onChange={(e) => setCustomStyleDescription(e.target.value)}
-                    placeholder="Describe the persona... (e.g. A cynical 1950s detective, or a hyper-active tech influencer)"
-                    className="w-full h-24 rounded-2xl px-6 py-4 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-none text-[11px] font-bold text-zinc-900 dark:text-white focus:ring-2 focus:ring-[#0071e3] outline-none transition-all"
-                  />
-                </div>
-              )}
-            </div>
-
             <Button type="submit" isLoading={isGenerating} className="w-full h-20 rounded-[1.8rem] bg-[#0071e3] text-white shadow-[0_20px_50px_rgba(0,113,227,0.3)] font-black uppercase tracking-[0.4em] text-[10px] transition-all duration-500 active:scale-95">
-              {isGenerating ? 'ANALYZING...' : 'Generate Protocol Posts'}
+              {isGenerating ? 'ANALYZING...' : 'Synthesize Post'}
             </Button>
           </form>
         </div>
@@ -484,14 +494,18 @@ export default function App() {
                 <svg className="w-10 h-10 opacity-30 text-zinc-900 dark:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={0.5}><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               </div>
               <h3 className="text-[10px] font-black uppercase tracking-[0.7em] opacity-40 text-zinc-900 dark:text-white">Ready for Synthesis</h3>
+              <p className="text-[8px] font-black uppercase tracking-[0.2em] mt-4 opacity-20 text-zinc-900 dark:text-white">Awaiting Project Definition</p>
             </div>
           )}
 
           {error && (
             <div className="w-full p-12 bg-red-50 dark:bg-red-500/5 rounded-[3rem] text-center space-y-6 animate-reveal border border-red-500/20 shadow-sm">
               <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-[1.5rem] flex items-center justify-center mx-auto"><svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div>
-              <p className="font-bold text-red-600 dark:text-red-400">{error}</p>
-              <Button onClick={() => setError(null)} variant="outline" className="px-8 py-3 text-[9px] border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 mx-auto">Dismiss</Button>
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Protocol Aborted</p>
+                <p className="font-bold text-red-600 dark:text-red-400">{error}</p>
+              </div>
+              <Button onClick={() => setError(null)} variant="outline" className="px-8 py-3 text-[9px] border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 mx-auto">Restart Node</Button>
             </div>
           )}
 

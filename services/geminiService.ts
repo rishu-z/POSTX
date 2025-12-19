@@ -1,6 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { PostRequest, GeneratedPost, GroundingSource, ModelTier, ProviderEngine, PostStyle } from "../types";
+import { PostRequest, GeneratedPost, GroundingSource, ModelTier, ProviderEngine, PostStyle, PostLength } from "../types";
 
 export const generateXPost = async (request: PostRequest): Promise<GeneratedPost> => {
   // Use user-provided key if available in config, otherwise use system key
@@ -25,17 +25,20 @@ export const generateXPost = async (request: PostRequest): Promise<GeneratedPost
     ? `CUSTOM IDENTITY: ${request.customStyleDescription}`
     : `STYLE: ${request.style}`;
 
+  // Use the manual maxCharacters as the absolute constraint
   const systemInstruction = `
     You are an elite Social Media Ghostwriter. 
     ${styleProfile}
-    LIMIT: ${request.maxCharacters} characters.
+    STRICT CHARACTER LIMIT: ${request.maxCharacters} characters. 
+    (This is an absolute limit. If the limit is small, be punchy. If the limit is large, write a comprehensive detailed post or thread).
 
     RESEARCH MODE: If the subject is a link, crawl it for context. If it's a topic, find trending angles.
     STRICT RULES:
-    1. No AI clichés or "In the world of...".
+    1. No AI clichés like "In the world of...", "Revolutionizing...", or "Unlocking...".
     2. No hashtags unless specifically requested.
-    3. Aggressive white space (human-like).
-    4. Write as an industry insider, not a bot.
+    3. Use aggressive white space for readability (human-like).
+    4. Write as an industry insider with a specific perspective, not a generic assistant.
+    5. TARGET LENGTH: Aim to get close to ${request.maxCharacters} characters without exceeding it, unless the topic is simple.
     
     ${request.customInstructions ? `USER REQUIREMENTS: ${request.customInstructions}` : ''}
   `;
@@ -44,9 +47,9 @@ export const generateXPost = async (request: PostRequest): Promise<GeneratedPost
     const contents = request.previousHistory ? [...request.previousHistory] : [];
     
     if (request.refinementCommand) {
-      contents.push({ role: 'user', parts: [{ text: `REFINEMENT COMMAND: ${request.refinementCommand}. Keep the character limit of ${request.maxCharacters}.` }] });
+      contents.push({ role: 'user', parts: [{ text: `REFINEMENT COMMAND: ${request.refinementCommand}. Stay under ${request.maxCharacters} characters.` }] });
     } else {
-      contents.push({ role: 'user', parts: [{ text: `Subject/Context: "${request.projectName}". Research this and write the post.` }] });
+      contents.push({ role: 'user', parts: [{ text: `Project/Subject: "${request.projectName}". Synthesize a high-impact post under ${request.maxCharacters} characters.` }] });
     }
 
     const response = await ai.models.generateContent({
@@ -71,7 +74,6 @@ export const generateXPost = async (request: PostRequest): Promise<GeneratedPost
       });
     }
 
-    // Keep track of the conversation for refinement
     const newHistory = [
       ...contents,
       { role: 'model', parts: [{ text: content }] }
@@ -84,8 +86,8 @@ export const generateXPost = async (request: PostRequest): Promise<GeneratedPost
     };
   } catch (error: any) {
     console.error("Gemini Error:", error);
-    if (error.message?.includes("API_KEY_INVALID") || error.message?.includes("key not found")) {
-      throw new Error("INVALID_KEY: The provided API key for " + request.engine + " is invalid.");
+    if (error.message?.includes("not found") || error.message?.includes("404")) {
+      throw new Error("MODEL_NOT_FOUND: The selected model is not available for this API key. Try 'Speed (Flash)'.");
     }
     throw new Error(error.message || "Protocol node failure.");
   }
@@ -125,7 +127,7 @@ const callExternalProvider = async (request: PostRequest): Promise<GeneratedPost
   
   let prompt = "";
   if (refinementCommand) {
-    prompt = `The user wants a change: "${refinementCommand}". Base it on the subject ${projectName} and style ${styleProfile}. Limit: ${maxCharacters} chars.`;
+    prompt = `The user wants a change: "${refinementCommand}". Base it on "${projectName}" in style "${styleProfile}". Limit: ${maxCharacters} chars.`;
   } else {
     prompt = `Subject: ${projectName}. Write a Twitter post in ${styleProfile} style. Limit: ${maxCharacters} chars. No hashtags. No AI cliches.`;
   }
@@ -134,11 +136,6 @@ const callExternalProvider = async (request: PostRequest): Promise<GeneratedPost
     "Authorization": `Bearer ${config.apiKey}`,
     "Content-Type": "application/json"
   };
-
-  if (request.engine === ProviderEngine.OPENROUTER) {
-    headers["HTTP-Referer"] = window.location.origin;
-    headers["X-Title"] = "Postix AI";
-  }
 
   try {
     const response = await fetch(url, {
