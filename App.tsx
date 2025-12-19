@@ -16,32 +16,30 @@ const RESEARCH_LOGS = [
 ];
 
 const ENGINE_MODELS: Record<string, { id: string, name: string, description?: string }[]> = {
+  [ProviderEngine.GEMINI]: [
+    { id: 'gemini-2.5-flash-latest', name: 'Gemini 2.5 Flash', description: 'Ultra-fast multimodal' },
+    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'Advanced logic & research' },
+  ],
   [ProviderEngine.OPENROUTER]: [
     { id: 'google/gemini-2.0-flash-lite-preview-02-05:free', name: 'Gemini 2.0 Flash Lite (Free)', description: 'Extremely fast and reliable' },
     { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free)', description: 'Advanced reasoning' },
     { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B (Free)', description: 'Punchy and concise' },
     { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', description: 'Smart and economical' },
     { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', description: 'Best for creative ghostwriting' },
-    { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', description: 'Massive knowledge base' },
-    { id: 'google/gemini-pro-1.5', name: 'Gemini 1.5 Pro', description: 'Google\'s powerhouse' },
   ],
   [ProviderEngine.GROQ]: [
     { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Instant generation' },
     { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Hyper-speed' },
-    { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B', description: 'Broad reasoning' },
   ],
   [ProviderEngine.OPENAI]: [
     { id: 'gpt-4o', name: 'GPT-4o', description: 'Flagship model' },
     { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast and cheap' },
-    { id: 'o1-preview', name: 'o1 Preview', description: 'Maximum intelligence' },
   ],
   [ProviderEngine.ANTHROPIC]: [
     { id: 'claude-3-5-sonnet-latest', name: 'Claude 3.5 Sonnet', description: 'The writer\'s choice' },
-    { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', description: 'Lighting fast' },
   ],
   [ProviderEngine.GROK]: [
     { id: 'grok-beta', name: 'Grok Beta', description: 'Witty and current' },
-    { id: 'grok-2', name: 'Grok 2', description: 'Advanced logic' },
   ]
 };
 
@@ -50,6 +48,7 @@ export default function App() {
   const [projectName, setProjectName] = useState('');
   const [maxCharacters, setMaxCharacters] = useState(280);
   const [style, setStyle] = useState<PostStyle>(PostStyle.STORYTELLER);
+  const [customStyleDescription, setCustomStyleDescription] = useState('');
   const [engine, setEngine] = useState<ProviderEngine>(ProviderEngine.GEMINI);
   const [modelTier, setModelTier] = useState<ModelTier>(ModelTier.FLASH);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -58,10 +57,12 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<'style' | 'model' | 'engine' | 'setup-model' | null>(null);
   const [hasKey, setHasKey] = useState(false);
+  const [refinementCommand, setRefinementCommand] = useState('');
 
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [setupEngine, setSetupEngine] = useState<ProviderEngine>(ProviderEngine.GEMINI);
   const [configs, setConfigs] = useState<Record<string, ProviderConfig>>({
+    [ProviderEngine.GEMINI]: { engine: ProviderEngine.GEMINI, apiKey: '', model: 'gemini-2.5-flash-latest', temperature: 0.7 },
     [ProviderEngine.GROQ]: { engine: ProviderEngine.GROQ, apiKey: '', model: 'llama-3.3-70b-versatile', baseUrl: 'https://api.groq.com/openai/v1/chat/completions', temperature: 0.2 },
     [ProviderEngine.OPENAI]: { engine: ProviderEngine.OPENAI, apiKey: '', model: 'gpt-4o', baseUrl: 'https://api.openai.com/v1/chat/completions', temperature: 0.7 },
     [ProviderEngine.ANTHROPIC]: { engine: ProviderEngine.ANTHROPIC, apiKey: '', model: 'claude-3-5-sonnet-latest', baseUrl: '', temperature: 0.7 },
@@ -98,12 +99,9 @@ export default function App() {
           const selected = await window.aistudio.hasSelectedApiKey();
           setHasKey(selected);
         } catch (e) {
-          console.error("AI Studio key check failed:", e);
-          setHasKey(true); // Fallback to assuming key is provided via env
+          setHasKey(true);
         }
       } else {
-        // Not in AI Studio environment (e.g. on Vercel)
-        // Key should be set in environment variables
         setHasKey(true);
       }
     };
@@ -170,11 +168,11 @@ export default function App() {
         const selected = await window.aistudio.hasSelectedApiKey();
         setHasKey(selected);
       } catch (e) {
-        console.error("Failed to open AI Studio key selector:", e);
-        setError("AI Studio bridge failed. Ensure you've set your API_KEY in project settings.");
+        setError("AI Studio selector failed.");
       }
     } else {
-      setError("This engine is managed via environment variables on this domain.");
+      setIsSetupOpen(true);
+      setSetupEngine(ProviderEngine.GEMINI);
     }
   };
 
@@ -183,14 +181,15 @@ export default function App() {
     setIsSetupOpen(false);
   };
 
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!projectName.trim()) return;
+  const handleGenerate = async (e?: React.FormEvent, refinement?: string) => {
+    if (e) e.preventDefault();
+    if (!projectName.trim() && !refinement) return;
     
     // @ts-ignore
     const isAiStudio = !!(window.aistudio && window.aistudio.openSelectKey);
+    const hasCustomKey = configs[engine]?.apiKey;
 
-    if (engine === ProviderEngine.GEMINI && !hasKey && isAiStudio) {
+    if (engine === ProviderEngine.GEMINI && !hasKey && isAiStudio && !hasCustomKey) {
       await handleLinkKey();
       return;
     }
@@ -202,7 +201,7 @@ export default function App() {
     }
 
     setIsGenerating(true);
-    setResult(null);
+    if (!refinement) setResult(null); // Only clear result for new generations, not refinements
     setError(null);
     setLogIndex(0);
     
@@ -211,11 +210,15 @@ export default function App() {
         projectName, 
         maxCharacters, 
         style, 
+        customStyleDescription,
         engine,
         modelTier,
-        config: configs[engine]
+        config: configs[engine],
+        refinementCommand: refinement,
+        previousHistory: result?.history as any
       });
       setResult(response);
+      setRefinementCommand('');
     } catch (err: any) {
       setError(err.message || "Synthesis Protocol Error.");
     } finally {
@@ -284,72 +287,63 @@ export default function App() {
               </div>
 
               <div className="bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl p-6 border border-zinc-200 dark:border-white/5 space-y-6">
-                {setupEngine === ProviderEngine.GEMINI ? (
-                  <div className="text-center py-4 space-y-6">
-                    <p className="text-[10px] font-bold text-[#0071e3] uppercase bg-[#0071e3]/5 p-4 rounded-xl">AI Studio Secure Billing Integration</p>
-                    <Button onClick={handleLinkKey} className={`w-full h-12 rounded-xl text-[9px] ${hasKey ? 'bg-green-600' : 'bg-[#0071e3]'}`}>
-                      {hasKey ? 'Engine Connected' : 'Link AI Studio Key'}
-                    </Button>
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">API Access Key</label>
+                    <input type="password" value={configs[setupEngine]?.apiKey || ''} onChange={(e) => setConfigs({ ...configs, [setupEngine]: { ...configs[setupEngine], apiKey: e.target.value } })} placeholder="sk-..." className="w-full rounded-xl px-4 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none outline-none text-[11px] font-mono font-bold text-zinc-900 dark:text-white" />
                   </div>
-                ) : (
-                  <div className="space-y-5">
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">API Access Key</label>
-                      <input type="password" value={configs[setupEngine]?.apiKey || ''} onChange={(e) => setConfigs({ ...configs, [setupEngine]: { ...configs[setupEngine], apiKey: e.target.value } })} placeholder="sk-..." className="w-full rounded-xl px-4 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none outline-none text-[11px] font-mono font-bold text-zinc-900 dark:text-white" />
-                    </div>
 
-                    <div className="space-y-2" ref={setupModelDropdownRef}>
-                      <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Target Model</label>
-                      <div className="relative">
-                        <button 
-                          type="button" 
-                          onClick={() => setActiveMenu(activeMenu === 'setup-model' ? null : 'setup-model')}
-                          className="w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none rounded-xl px-4 py-4 flex items-center justify-between text-[11px] font-bold text-zinc-900 dark:text-white"
-                        >
-                          <span className="truncate">{getModelLabel(setupEngine, configs[setupEngine]?.model || '')}</span>
-                          <svg className="w-3 h-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
-                        </button>
-                        
-                        {activeMenu === 'setup-model' && (
-                          <div className="absolute bottom-full mb-2 left-0 w-full bg-white dark:bg-[#1a1a1c] rounded-2xl p-2 shadow-2xl border border-zinc-200 dark:border-white/10 z-[210] animate-reveal origin-bottom space-y-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-                            {ENGINE_MODELS[setupEngine]?.map(m => (
-                              <button 
-                                key={m.id} 
-                                type="button" 
-                                onClick={() => { setConfigs({...configs, [setupEngine]: {...configs[setupEngine], model: m.id}}); setActiveMenu(null); }}
-                                className={`w-full text-left px-4 py-3 rounded-lg transition-all ${configs[setupEngine]?.model === m.id ? 'bg-[#0071e3] text-white' : 'hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-900 dark:text-zinc-100'}`}
-                              >
-                                <div className="text-[10px] font-black uppercase tracking-tighter">{m.name}</div>
-                                {m.description && <div className="text-[8px] opacity-60 font-medium truncate">{m.description}</div>}
-                              </button>
-                            ))}
-                            <div className="p-3 border-t border-zinc-200 dark:border-white/10 mt-1">
-                              <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mb-2">Custom Model ID</p>
-                              <input 
-                                type="text" 
-                                placeholder="Enter specific ID..." 
-                                value={configs[setupEngine]?.model || ''}
-                                onChange={(e) => setConfigs({...configs, [setupEngine]: {...configs[setupEngine], model: e.target.value}})}
-                                className="w-full bg-zinc-100 dark:bg-white/5 rounded-lg px-3 py-2 text-[10px] outline-none border-none focus:ring-1 focus:ring-[#0071e3]"
-                              />
-                            </div>
+                  <div className="space-y-2" ref={setupModelDropdownRef}>
+                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Target Model</label>
+                    <div className="relative">
+                      <button 
+                        type="button" 
+                        onClick={() => setActiveMenu(activeMenu === 'setup-model' ? null : 'setup-model')}
+                        className="w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none rounded-xl px-4 py-4 flex items-center justify-between text-[11px] font-bold text-zinc-900 dark:text-white"
+                      >
+                        <span className="truncate">{getModelLabel(setupEngine, configs[setupEngine]?.model || '')}</span>
+                        <svg className="w-3 h-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                      
+                      {activeMenu === 'setup-model' && (
+                        <div className="absolute bottom-full mb-2 left-0 w-full bg-white dark:bg-[#1a1a1c] rounded-2xl p-2 shadow-2xl border border-zinc-200 dark:border-white/10 z-[210] animate-reveal origin-bottom space-y-1 max-h-[300px] overflow-y-auto custom-scrollbar">
+                          {ENGINE_MODELS[setupEngine]?.map(m => (
+                            <button 
+                              key={m.id} 
+                              type="button" 
+                              onClick={() => { setConfigs({...configs, [setupEngine]: {...configs[setupEngine], model: m.id}}); setActiveMenu(null); }}
+                              className={`w-full text-left px-4 py-3 rounded-lg transition-all ${configs[setupEngine]?.model === m.id ? 'bg-[#0071e3] text-white' : 'hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-900 dark:text-zinc-100'}`}
+                            >
+                              <div className="text-[10px] font-black uppercase tracking-tighter">{m.name}</div>
+                              {m.description && <div className="text-[8px] opacity-60 font-medium truncate">{m.description}</div>}
+                            </button>
+                          ))}
+                          <div className="p-3 border-t border-zinc-200 dark:border-white/10 mt-1">
+                            <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mb-2">Custom Model ID</p>
+                            <input 
+                              type="text" 
+                              placeholder="Enter specific ID..." 
+                              value={configs[setupEngine]?.model || ''}
+                              onChange={(e) => setConfigs({...configs, [setupEngine]: {...configs[setupEngine], model: e.target.value}})}
+                              className="w-full bg-zinc-100 dark:bg-white/5 rounded-lg px-3 py-2 text-[10px] outline-none border-none focus:ring-1 focus:ring-[#0071e3]"
+                            />
                           </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Temp</label>
-                        <input type="number" step="0.1" min="0" max="2" value={configs[setupEngine]?.temperature || 0.7} onChange={(e) => setConfigs({ ...configs, [setupEngine]: { ...configs[setupEngine], temperature: parseFloat(e.target.value) } })} className="w-full rounded-xl px-4 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none outline-none text-[10px] font-bold text-zinc-900 dark:text-white" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Context</label>
-                        <div className="w-full px-4 py-4 bg-zinc-100 dark:bg-zinc-800/50 rounded-xl text-[10px] font-bold opacity-40">AUTO</div>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Temp</label>
+                      <input type="number" step="0.1" min="0" max="2" value={configs[setupEngine]?.temperature || 0.7} onChange={(e) => setConfigs({ ...configs, [setupEngine]: { ...configs[setupEngine], temperature: parseFloat(e.target.value) } })} className="w-full rounded-xl px-4 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none outline-none text-[10px] font-bold text-zinc-900 dark:text-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Context</label>
+                      <div className="w-full px-4 py-4 bg-zinc-100 dark:bg-zinc-800/50 rounded-xl text-[10px] font-bold opacity-40 uppercase">Hybrid</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -366,19 +360,19 @@ export default function App() {
         <div className="lg:col-span-5 space-y-10 animate-reveal">
           <div className="space-y-4">
             <h2 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.85] text-zinc-900 dark:text-white transition-colors uppercase">Signal <br /> Craft.</h2>
-            <p className="opacity-70 font-medium text-lg text-zinc-700 dark:text-zinc-300">Multi-engine ghostwriting protocol.</p>
+            <p className="opacity-70 font-medium text-lg text-zinc-700 dark:text-zinc-300">Intelligent research & ghostwriting.</p>
           </div>
 
-          <form onSubmit={handleGenerate} className="bg-white dark:bg-[#121214] rounded-[3rem] p-8 lg:p-12 space-y-10 shadow-xl border border-zinc-200 dark:border-white/10 transition-colors">
+          <form onSubmit={(e) => handleGenerate(e)} className="bg-white dark:bg-[#121214] rounded-[3rem] p-8 lg:p-12 space-y-10 shadow-xl border border-zinc-200 dark:border-white/10 transition-colors">
             <div className="space-y-3 relative">
               <div className="flex justify-between items-center px-1">
-                <label className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-500 dark:text-zinc-400">Target Subject</label>
+                <label className="text-[10px] font-black uppercase tracking-[0.6em] text-zinc-500 dark:text-zinc-400">Subject or URL</label>
                 <div className="bg-zinc-100 dark:bg-white/5 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-zinc-200 dark:border-white/10">
                    <input type="number" value={maxCharacters} onChange={(e) => setMaxCharacters(parseInt(e.target.value) || 0)} className="w-12 bg-transparent border-none focus:ring-0 text-[10px] font-mono font-bold text-[#0071e3] text-right p-0" />
                    <span className="text-[8px] font-black text-zinc-400 dark:text-white/40">LMT</span>
                 </div>
               </div>
-              <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="@username or topic" className="w-full rounded-2xl px-6 py-5 focus:outline-none focus:ring-2 focus:ring-[#0071e3]/40 transition-all text-lg font-bold border border-zinc-200 dark:border-none bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50" required />
+              <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Topic, @username, or https://..." className="w-full rounded-2xl px-6 py-5 focus:outline-none focus:ring-2 focus:ring-[#0071e3]/40 transition-all text-lg font-bold border border-zinc-200 dark:border-none bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50" required />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -432,11 +426,17 @@ export default function App() {
                   </div>
                 )}
               </div>
-            </div>
-
-            <div className="space-y-4 px-1">
-              <label className="text-[10px] font-black uppercase text-zinc-500 dark:text-zinc-400">Scale Density</label>
-              <input type="range" min="0" max="4000" step="10" value={maxCharacters} onChange={(e) => setMaxCharacters(parseInt(e.target.value))} className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full appearance-none cursor-pointer accent-[#0071e3]" />
+              
+              {style === PostStyle.CUSTOM && (
+                <div className="mt-4 animate-reveal">
+                  <textarea 
+                    value={customStyleDescription}
+                    onChange={(e) => setCustomStyleDescription(e.target.value)}
+                    placeholder="Describe the persona... (e.g. A hyper-active crypto trader, or a minimal philosopher)"
+                    className="w-full h-24 rounded-2xl px-6 py-4 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-none text-[11px] font-bold text-zinc-900 dark:text-white focus:ring-2 focus:ring-[#0071e3] outline-none"
+                  />
+                </div>
+              )}
             </div>
 
             <Button type="submit" isLoading={isGenerating} className="w-full h-20 rounded-[1.8rem] bg-[#0071e3] text-white shadow-[0_20px_50px_rgba(0,113,227,0.3)] font-black uppercase tracking-[0.4em] text-[10px] transition-all duration-500 active:scale-95">
@@ -482,12 +482,34 @@ export default function App() {
           )}
 
           {result && !isGenerating && (
-            <div className="w-full space-y-10 animate-reveal">
+            <div className="w-full space-y-8 animate-reveal">
               <div className="flex items-center justify-between px-6">
                 <div className="flex items-center gap-3"><div className="w-2 h-2 bg-[#0071e3] rounded-full shadow-lg"></div><span className="text-[10px] font-black uppercase tracking-[0.5em] text-zinc-500 dark:text-white/40">Payload_Validated</span></div>
                 <div className="bg-zinc-200 dark:bg-white/10 px-4 py-1.5 rounded-full"><span className="text-[10px] font-mono font-bold text-[#0071e3]">{result.content.length} / {maxCharacters}</span></div>
               </div>
               <PostCard post={result} />
+              
+              {/* REFINEMENT COMMAND BAR */}
+              <div className="bg-white dark:bg-[#121214] border border-zinc-200 dark:border-white/10 rounded-[2.5rem] p-6 shadow-xl flex items-center gap-4 group">
+                <div className="w-10 h-10 bg-[#0071e3]/10 flex items-center justify-center rounded-xl text-[#0071e3]">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                </div>
+                <input 
+                  type="text" 
+                  value={refinementCommand}
+                  onChange={(e) => setRefinementCommand(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleGenerate(undefined, refinementCommand)}
+                  placeholder="Tell the bot to change something... (e.g. 'Make it funnier')" 
+                  className="flex-1 bg-transparent border-none outline-none text-[11px] font-bold text-zinc-900 dark:text-white placeholder:opacity-30"
+                />
+                <button 
+                  onClick={() => handleGenerate(undefined, refinementCommand)}
+                  disabled={!refinementCommand.trim()}
+                  className="px-6 py-3 bg-[#0071e3] text-white rounded-xl text-[9px] font-black uppercase tracking-widest disabled:opacity-30 transition-all hover:scale-105"
+                >
+                  Apply
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -1,52 +1,57 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { PostRequest, GeneratedPost, GroundingSource, ModelTier, ProviderEngine } from "../types";
+import { PostRequest, GeneratedPost, GroundingSource, ModelTier, ProviderEngine, PostStyle } from "../types";
 
 export const generateXPost = async (request: PostRequest): Promise<GeneratedPost> => {
+  // Use user-provided key if available in config, otherwise use system key
+  const userKey = request.config?.apiKey;
+  const activeApiKey = (request.engine === ProviderEngine.GEMINI && userKey) ? userKey : process.env.API_KEY;
+
   if (request.config && request.config.apiKey && request.engine !== ProviderEngine.GEMINI) {
     return await callExternalProvider(request);
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: activeApiKey as string });
   
   const modelMap = {
-    [ModelTier.FLASH]: 'gemini-3-flash-preview',
+    [ModelTier.FLASH]: 'gemini-2.5-flash-latest',
     [ModelTier.PRO]: 'gemini-3-pro-preview',
     [ModelTier.LITE]: 'gemini-flash-lite-latest'
   };
 
-  const selectedModel = modelMap[request.modelTier] || 'gemini-3-flash-preview';
+  const selectedModel = request.config?.model || modelMap[request.modelTier] || 'gemini-3-flash-preview';
 
-  const enginePersonalities = {
-    [ProviderEngine.GEMINI]: "Focus on multimodal logic and creative synthesis.",
-    [ProviderEngine.OPENAI]: "Focus on high-energy, structured, and professional output.",
-    [ProviderEngine.ANTHROPIC]: "Focus on nuanced, ethical, and conversational storytelling.",
-    [ProviderEngine.GROQ]: "Focus on rapid-fire, concise, and punchy statements.",
-    [ProviderEngine.OPENROUTER]: "Versatile cross-model logic with broad context.",
-    [ProviderEngine.GROK]: "Witty, slightly rebellious, and highly current logic."
-  };
+  const styleProfile = request.style === PostStyle.CUSTOM 
+    ? `CUSTOM IDENTITY: ${request.customStyleDescription}`
+    : `STYLE: ${request.style}`;
 
   const systemInstruction = `
-    You are an elite Social Media Ghostwriter.
-    ENGINE PERSONALITY: ${enginePersonalities[request.engine] || "Versatile"}
-    
-    TARGET: "${request.projectName}"
-    STYLE: ${request.style}
+    You are an elite Social Media Ghostwriter. 
+    ${styleProfile}
     LIMIT: ${request.maxCharacters} characters.
 
+    RESEARCH MODE: If the subject is a link, crawl it for context. If it's a topic, find trending angles.
     STRICT RULES:
-    1. No AI clichés.
-    2. No hashtags.
-    3. Aggressive white space.
-    4. Write as a human expert.
+    1. No AI clichés or "In the world of...".
+    2. No hashtags unless specifically requested.
+    3. Aggressive white space (human-like).
+    4. Write as an industry insider, not a bot.
     
     ${request.customInstructions ? `USER REQUIREMENTS: ${request.customInstructions}` : ''}
   `;
 
   try {
+    const contents = request.previousHistory ? [...request.previousHistory] : [];
+    
+    if (request.refinementCommand) {
+      contents.push({ role: 'user', parts: [{ text: `REFINEMENT COMMAND: ${request.refinementCommand}. Keep the character limit of ${request.maxCharacters}.` }] });
+    } else {
+      contents.push({ role: 'user', parts: [{ text: `Subject/Context: "${request.projectName}". Research this and write the post.` }] });
+    }
+
     const response = await ai.models.generateContent({
       model: selectedModel,
-      contents: [{ parts: [{ text: `Research "${request.projectName}" and write a ${request.maxCharacters} char post.` }] }],
+      contents,
       config: {
         systemInstruction,
         tools: [{ googleSearch: {} }],
@@ -66,20 +71,28 @@ export const generateXPost = async (request: PostRequest): Promise<GeneratedPost
       });
     }
 
+    // Keep track of the conversation for refinement
+    const newHistory = [
+      ...contents,
+      { role: 'model', parts: [{ text: content }] }
+    ];
+
     return {
       content: content.trim(),
-      sources: Array.from(new Map(sources.map(s => [s.uri, s])).values())
+      sources: Array.from(new Map(sources.map(s => [s.uri, s])).values()),
+      history: newHistory as any
     };
   } catch (error: any) {
-    if (error.message?.includes("404") || error.message?.includes("not found")) {
-      throw new Error("SECURE_KEY_INVALID: Please link your OWN paid project key in AI Studio.");
+    console.error("Gemini Error:", error);
+    if (error.message?.includes("API_KEY_INVALID") || error.message?.includes("key not found")) {
+      throw new Error("INVALID_KEY: The provided API key for " + request.engine + " is invalid.");
     }
     throw new Error(error.message || "Protocol node failure.");
   }
 };
 
 const callExternalProvider = async (request: PostRequest): Promise<GeneratedPost> => {
-  const { config, projectName, style, maxCharacters } = request;
+  const { config, projectName, style, maxCharacters, refinementCommand } = request;
   if (!config) throw new Error("Missing configuration.");
 
   let url = config.baseUrl?.trim() || "";
@@ -108,7 +121,14 @@ const callExternalProvider = async (request: PostRequest): Promise<GeneratedPost
       break;
   }
 
-  const prompt = `Write a ${style} style Twitter post about ${projectName}. Limit: ${maxCharacters} characters. No hashtags. No AI cliches.`;
+  const styleProfile = request.style === PostStyle.CUSTOM ? request.customStyleDescription : request.style;
+  
+  let prompt = "";
+  if (refinementCommand) {
+    prompt = `The user wants a change: "${refinementCommand}". Base it on the subject ${projectName} and style ${styleProfile}. Limit: ${maxCharacters} chars.`;
+  } else {
+    prompt = `Subject: ${projectName}. Write a Twitter post in ${styleProfile} style. Limit: ${maxCharacters} chars. No hashtags. No AI cliches.`;
+  }
 
   const headers: Record<string, string> = {
     "Authorization": `Bearer ${config.apiKey}`,

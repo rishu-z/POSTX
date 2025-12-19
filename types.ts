@@ -7,7 +7,8 @@ export enum PostStyle {
   FOUNDER_VIBE = 'Founder Vibe',
   MINIMALIST = 'Minimalist',
   SARCASTIC = 'Sarcastic',
-  CURATED = 'Curated Insights'
+  CURATED = 'Curated Insights',
+  CUSTOM = 'Custom Identity'
 }
 
 export enum ProviderEngine {
@@ -33,6 +34,7 @@ export interface GroundingSource {
 export interface GeneratedPost {
   content: string;
   sources: GroundingSource[];
+  history?: { role: 'user' | 'model'; parts: { text: string }[] }[];
 }
 
 export interface ProviderConfig {
@@ -47,8 +49,11 @@ export interface PostRequest {
   projectName: string;
   maxCharacters: number;
   style: PostStyle;
+  customStyleDescription?: string;
   engine: ProviderEngine;
   modelTier: ModelTier;
   customInstructions?: string;
   config?: ProviderConfig;
+  refinementCommand?: string;
+  previousHistory?: { role: 'user' | 'model'; parts: { text: string }[] }[];
 }
