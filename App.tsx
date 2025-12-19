@@ -15,38 +15,33 @@ const RESEARCH_LOGS = [
   "DEPLOYING_GHOST_SIGNAL..."
 ];
 
-// Predefined models for each engine to populate the dropdown
-const ENGINE_MODELS: Record<string, { id: string, name: string }[]> = {
+const ENGINE_MODELS: Record<string, { id: string, name: string, description?: string }[]> = {
   [ProviderEngine.OPENROUTER]: [
-    { id: 'google/gemini-2.0-flash-lite-preview-02-05:free', name: 'Gemini 2.0 Flash Lite (Free)' },
-    { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free)' },
-    { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini' },
-    { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B (Pro)' },
-    { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet' },
-    { id: 'mistralai/mistral-small', name: 'Mistral Small' },
-    { id: 'minimax/minimax-01', name: 'MiniMax M2' },
+    { id: 'google/gemini-2.0-flash-lite-preview-02-05:free', name: 'Gemini 2.0 Flash Lite (Free)', description: 'Extremely fast and reliable' },
+    { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free)', description: 'Advanced reasoning' },
+    { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B (Free)', description: 'Punchy and concise' },
+    { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', description: 'Smart and economical' },
+    { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', description: 'Best for creative ghostwriting' },
+    { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', description: 'Massive knowledge base' },
+    { id: 'google/gemini-pro-1.5', name: 'Gemini 1.5 Pro', description: 'Google\'s powerhouse' },
   ],
   [ProviderEngine.GROQ]: [
-    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B' },
-    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B' },
-    { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B' },
-    { id: 'gemma2-9b-it', name: 'Gemma 2 9B' },
+    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Instant generation' },
+    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Hyper-speed' },
+    { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B', description: 'Broad reasoning' },
   ],
   [ProviderEngine.OPENAI]: [
-    { id: 'gpt-4o', name: 'GPT-4o' },
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-    { id: 'o1-preview', name: 'o1 Preview' },
-    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
+    { id: 'gpt-4o', name: 'GPT-4o', description: 'Flagship model' },
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast and cheap' },
+    { id: 'o1-preview', name: 'o1 Preview', description: 'Maximum intelligence' },
   ],
   [ProviderEngine.ANTHROPIC]: [
-    { id: 'claude-3-5-sonnet-latest', name: 'Claude 3.5 Sonnet' },
-    { id: 'claude-3-opus-latest', name: 'Claude 3 Opus' },
-    { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku' },
+    { id: 'claude-3-5-sonnet-latest', name: 'Claude 3.5 Sonnet', description: 'The writer\'s choice' },
+    { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', description: 'Lighting fast' },
   ],
   [ProviderEngine.GROK]: [
-    { id: 'grok-beta', name: 'Grok Beta' },
-    { id: 'grok-2', name: 'Grok 2' },
-    { id: 'grok-2-mini', name: 'Grok 2 Mini' },
+    { id: 'grok-beta', name: 'Grok Beta', description: 'Witty and current' },
+    { id: 'grok-2', name: 'Grok 2', description: 'Advanced logic' },
   ]
 };
 
@@ -202,9 +197,9 @@ export default function App() {
     }
   };
 
-  const getModelName = (engine: string, modelId: string) => {
-    const model = ENGINE_MODELS[engine]?.find(m => m.id === modelId);
-    return model ? model.name : modelId;
+  const getModelLabel = (eng: string, modelId: string) => {
+    const found = ENGINE_MODELS[eng]?.find(m => m.id === modelId);
+    return found ? found.name : (modelId || 'Select Model');
   };
 
   return (
@@ -246,7 +241,7 @@ export default function App() {
       {isSetupOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-reveal">
           <div className="absolute inset-0 bg-zinc-900/40 dark:bg-black/80 backdrop-blur-md" onClick={() => setIsSetupOpen(false)} />
-          <div className="relative w-full max-w-lg bg-white dark:bg-[#121214] rounded-[2.5rem] p-8 md:p-10 shadow-2xl border border-zinc-200 dark:border-white/10 overflow-hidden">
+          <div className="relative w-full max-w-lg bg-white dark:bg-[#121214] rounded-[2.5rem] p-8 md:p-10 shadow-2xl border border-zinc-200 dark:border-white/10 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h2 className="text-xl font-black uppercase tracking-tight text-zinc-900 dark:text-white leading-none">PROVIDER SETUP</h2>
@@ -255,7 +250,7 @@ export default function App() {
               <button onClick={() => setIsSetupOpen(false)} className="p-2.5 bg-zinc-100 dark:bg-white/10 rounded-full text-zinc-900 dark:text-white hover:scale-110 transition-transform"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
 
-            <div className="space-y-8">
+            <div className="space-y-6 overflow-y-auto custom-scrollbar pr-2 pb-6">
               <div className="grid grid-cols-3 gap-2">
                 {Object.values(ProviderEngine).map(e => (
                   <button key={e} onClick={() => setSetupEngine(e)} className={`py-3 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all border ${setupEngine === e ? 'bg-[#0071e3] text-white border-transparent' : 'bg-zinc-50 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-white/10'}`}>{e.split(' ').pop()}</button>
@@ -276,63 +271,65 @@ export default function App() {
                       <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">API Access Key</label>
                       <input type="password" value={configs[setupEngine]?.apiKey || ''} onChange={(e) => setConfigs({ ...configs, [setupEngine]: { ...configs[setupEngine], apiKey: e.target.value } })} placeholder="sk-..." className="w-full rounded-xl px-4 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none outline-none text-[11px] font-mono font-bold text-zinc-900 dark:text-white" />
                     </div>
-                    
-                    <div className="grid grid-cols-1 gap-4">
-                      <div className="space-y-2" ref={setupModelDropdownRef}>
-                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Target Model</label>
-                        <div className="relative">
-                          <button 
-                            type="button" 
-                            onClick={() => setActiveMenu(activeMenu === 'setup-model' ? null : 'setup-model')} 
-                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none rounded-xl px-4 py-4 flex items-center justify-between text-[10px] font-bold text-zinc-900 dark:text-white transition-colors text-left"
-                          >
-                            <span className="truncate">{getModelName(setupEngine, configs[setupEngine]?.model || '')}</span>
-                            <svg className="w-3 h-3 opacity-40 ml-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
-                          </button>
-                          
-                          {activeMenu === 'setup-model' && (
-                            <div className="absolute bottom-full mb-2 left-0 w-full bg-white dark:bg-[#1a1a1c] rounded-2xl p-2 shadow-2xl border border-zinc-200 dark:border-white/10 z-[210] animate-reveal origin-bottom space-y-1 max-h-[250px] overflow-y-auto custom-scrollbar">
-                              {ENGINE_MODELS[setupEngine]?.map(m => (
-                                <button 
-                                  key={m.id} 
-                                  type="button" 
-                                  onClick={() => { 
-                                    setConfigs({ ...configs, [setupEngine]: { ...configs[setupEngine], model: m.id } }); 
-                                    setActiveMenu(null); 
-                                  }} 
-                                  className={`w-full text-left px-4 py-3 rounded-lg text-[10px] font-medium transition-all ${configs[setupEngine]?.model === m.id ? 'bg-[#0071e3] text-white' : 'hover:bg-zinc-100 dark:hover:bg-white/10 text-zinc-900 dark:text-zinc-200'}`}
-                                >
-                                  {m.name}
-                                </button>
-                              ))}
-                              <div className="p-2 border-t border-zinc-100 dark:border-white/5 mt-1">
-                                <p className="text-[8px] uppercase font-black opacity-40 mb-2">Custom Model ID</p>
-                                <input 
-                                  type="text" 
-                                  value={configs[setupEngine]?.model || ''} 
-                                  onChange={(e) => setConfigs({ ...configs, [setupEngine]: { ...configs[setupEngine], model: e.target.value } })}
-                                  placeholder="Type custom ID..."
-                                  className="w-full bg-zinc-100 dark:bg-white/5 rounded-lg px-3 py-2 text-[10px] text-zinc-900 dark:text-white outline-none border-none focus:ring-1 focus:ring-[#0071e3]"
-                                />
-                              </div>
+
+                    <div className="space-y-2" ref={setupModelDropdownRef}>
+                      <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Target Model</label>
+                      <div className="relative">
+                        <button 
+                          type="button" 
+                          onClick={() => setActiveMenu(activeMenu === 'setup-model' ? null : 'setup-model')}
+                          className="w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none rounded-xl px-4 py-4 flex items-center justify-between text-[11px] font-bold text-zinc-900 dark:text-white"
+                        >
+                          <span className="truncate">{getModelLabel(setupEngine, configs[setupEngine]?.model || '')}</span>
+                          <svg className="w-3 h-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                        
+                        {activeMenu === 'setup-model' && (
+                          <div className="absolute bottom-full mb-2 left-0 w-full bg-white dark:bg-[#1a1a1c] rounded-2xl p-2 shadow-2xl border border-zinc-200 dark:border-white/10 z-[210] animate-reveal origin-bottom space-y-1 max-h-[300px] overflow-y-auto custom-scrollbar">
+                            {ENGINE_MODELS[setupEngine]?.map(m => (
+                              <button 
+                                key={m.id} 
+                                type="button" 
+                                onClick={() => { setConfigs({...configs, [setupEngine]: {...configs[setupEngine], model: m.id}}); setActiveMenu(null); }}
+                                className={`w-full text-left px-4 py-3 rounded-lg transition-all ${configs[setupEngine]?.model === m.id ? 'bg-[#0071e3] text-white' : 'hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-900 dark:text-zinc-100'}`}
+                              >
+                                <div className="text-[10px] font-black uppercase tracking-tighter">{m.name}</div>
+                                {m.description && <div className="text-[8px] opacity-60 font-medium truncate">{m.description}</div>}
+                              </button>
+                            ))}
+                            <div className="p-3 border-t border-zinc-200 dark:border-white/10 mt-1">
+                              <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mb-2">Custom Model ID</p>
+                              <input 
+                                type="text" 
+                                placeholder="Enter specific ID..." 
+                                value={configs[setupEngine]?.model || ''}
+                                onChange={(e) => setConfigs({...configs, [setupEngine]: {...configs[setupEngine], model: e.target.value}})}
+                                className="w-full bg-zinc-100 dark:bg-white/5 rounded-lg px-3 py-2 text-[10px] outline-none border-none focus:ring-1 focus:ring-[#0071e3]"
+                              />
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
-                      
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Temperature</label>
+                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Temp</label>
                         <input type="number" step="0.1" min="0" max="2" value={configs[setupEngine]?.temperature || 0.7} onChange={(e) => setConfigs({ ...configs, [setupEngine]: { ...configs[setupEngine], temperature: parseFloat(e.target.value) } })} className="w-full rounded-xl px-4 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none outline-none text-[10px] font-bold text-zinc-900 dark:text-white" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Context</label>
+                        <div className="w-full px-4 py-4 bg-zinc-100 dark:bg-zinc-800/50 rounded-xl text-[10px] font-bold opacity-40">AUTO</div>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="flex gap-3">
-                <Button onClick={() => setIsSetupOpen(false)} variant="outline" className="flex-1 h-12 rounded-xl text-[9px] text-zinc-500 border-zinc-200 dark:border-white/10">Discard</Button>
-                <Button onClick={saveConfigs} className="flex-[2] h-12 rounded-xl text-[9px] bg-[#0071e3] text-white">Save Engine</Button>
-              </div>
+            <div className="flex gap-3 pt-6 border-t border-zinc-200 dark:border-white/10 mt-auto">
+              <Button onClick={() => setIsSetupOpen(false)} variant="outline" className="flex-1 h-12 rounded-xl text-[9px] text-zinc-500 border-zinc-200 dark:border-white/10">Discard</Button>
+              <Button onClick={saveConfigs} className="flex-[2] h-12 rounded-xl text-[9px] bg-[#0071e3] text-white">Save Engine</Button>
             </div>
           </div>
         </div>
@@ -342,8 +339,8 @@ export default function App() {
       <main className="relative z-20 flex-1 w-full max-w-7xl mx-auto px-6 lg:px-10 py-4 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-20 items-start">
         <div className="lg:col-span-5 space-y-10 animate-reveal">
           <div className="space-y-4">
-            <h2 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.85] text-zinc-900 dark:text-white transition-colors">SIGNAL <br /> CRAFT.</h2>
-            <p className="opacity-70 font-medium text-lg text-zinc-700 dark:text-zinc-300">Multi-engine ghostwriting by RISHUZ.</p>
+            <h2 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.85] text-zinc-900 dark:text-white transition-colors uppercase">Signal <br /> Craft.</h2>
+            <p className="opacity-70 font-medium text-lg text-zinc-700 dark:text-zinc-300">Multi-engine ghostwriting protocol.</p>
           </div>
 
           <form onSubmit={handleGenerate} className="bg-white dark:bg-[#121214] rounded-[3rem] p-8 lg:p-12 space-y-10 shadow-xl border border-zinc-200 dark:border-white/10 transition-colors">
