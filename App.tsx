@@ -55,7 +55,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [logIndex, setLogIndex] = useState(0);
   const [result, setResult] = useState<GeneratedPost | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; isQuota?: boolean } | null>(null);
   const [activeMenu, setActiveMenu] = useState<'style' | 'model' | 'engine' | 'setup-model' | null>(null);
   const [hasKey, setHasKey] = useState(false);
   const [refinementCommand, setRefinementCommand] = useState('');
@@ -169,7 +169,7 @@ export default function App() {
         const selected = await window.aistudio.hasSelectedApiKey();
         setHasKey(selected);
       } catch (e) {
-        setError("AI Studio selector failed.");
+        setError({ message: "AI Studio selector failed." });
       }
     } else {
       setIsSetupOpen(true);
@@ -230,7 +230,11 @@ export default function App() {
       setResult(response);
       setRefinementCommand('');
     } catch (err: any) {
-      setError(err.message || "Synthesis Protocol Error.");
+      const isQuota = err.message?.includes("quota") || err.message?.includes("429") || err.message?.includes("EXHAUSTED");
+      setError({ 
+        message: isQuota ? "API Quota Exceeded. Free tier limits reached. Please wait 60s or enter your own API key in Integrations." : (err.message || "Synthesis Protocol Error."),
+        isQuota
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -260,10 +264,10 @@ export default function App() {
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setIsSetupOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white dark:bg-[#1a1a1c] border border-zinc-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-zinc-900 dark:text-white hover:bg-zinc-100 dark:hover:bg-[#2c2c2e] transition-all shadow-sm"
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${error?.isQuota ? 'bg-[#0071e3] text-white animate-pulse border-transparent' : 'bg-white dark:bg-[#1a1a1c] border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white hover:bg-zinc-100 dark:hover:bg-[#2c2c2e]'}`}
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            Integrations
+            {error?.isQuota ? 'Fix Quota Limits' : 'Integrations'}
           </button>
           
           <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 bg-white dark:bg-[#1a1a1c] rounded-xl border border-zinc-200 dark:border-white/10 shadow-sm text-zinc-900 dark:text-white">
@@ -307,6 +311,9 @@ export default function App() {
                       placeholder={setupEngine === ProviderEngine.GEMINI ? "Enter Gemini API Key..." : "sk-..."} 
                       className="w-full rounded-xl px-4 py-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-none outline-none text-[11px] font-mono font-bold text-zinc-900 dark:text-white" 
                     />
+                    {setupEngine === ProviderEngine.GEMINI && (
+                       <p className="text-[8px] font-bold text-zinc-500 mt-1 uppercase tracking-tighter">Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-[#0071e3] underline">AI Studio</a></p>
+                    )}
                   </div>
 
                   <div className="space-y-2" ref={setupModelDropdownRef}>
@@ -499,13 +506,26 @@ export default function App() {
           )}
 
           {error && (
-            <div className="w-full p-12 bg-red-50 dark:bg-red-500/5 rounded-[3rem] text-center space-y-6 animate-reveal border border-red-500/20 shadow-sm">
-              <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-[1.5rem] flex items-center justify-center mx-auto"><svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div>
-              <div className="space-y-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Protocol Aborted</p>
-                <p className="font-bold text-red-600 dark:text-red-400">{error}</p>
+            <div className={`w-full p-12 rounded-[3rem] text-center space-y-6 animate-reveal border shadow-sm ${error.isQuota ? 'bg-amber-50 dark:bg-amber-500/5 border-amber-500/20' : 'bg-red-50 dark:bg-red-500/5 border-red-500/20'}`}>
+              <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center mx-auto ${error.isQuota ? 'bg-amber-500/10 text-amber-500' : 'bg-red-500/10 text-red-500'}`}>
+                {error.isQuota ? (
+                   <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                ) : (
+                   <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                )}
               </div>
-              <Button onClick={() => setError(null)} variant="outline" className="px-8 py-3 text-[9px] border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 mx-auto">Restart Node</Button>
+              <div className="space-y-2">
+                <p className={`text-[10px] font-black uppercase tracking-widest ${error.isQuota ? 'text-amber-500' : 'text-red-400'}`}>
+                  {error.isQuota ? 'Rate Limit Encountered' : 'Protocol Aborted'}
+                </p>
+                <p className={`font-bold ${error.isQuota ? 'text-amber-700 dark:text-amber-200' : 'text-red-600 dark:text-red-400'}`}>{error.message}</p>
+              </div>
+              <div className="flex gap-3 justify-center">
+                {error.isQuota && (
+                   <Button onClick={() => setIsSetupOpen(true)} className="px-8 py-3 text-[9px] bg-amber-500 text-white rounded-xl">Enter Personal Key</Button>
+                )}
+                <Button onClick={() => setError(null)} variant="outline" className="px-8 py-3 text-[9px] border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300">Clear</Button>
+              </div>
             </div>
           )}
 
